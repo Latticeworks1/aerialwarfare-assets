@@ -153,16 +153,20 @@
     });
   }
 
-  function render(data) {
+  function setOnlinePill(online) {
     var pill = document.getElementById('statusPill');
     var statusText = document.getElementById('statusText');
-    if (data.serverOnline) {
+    if (online) {
       pill.className = 'status-pill online';
       statusText.textContent = 'ONLINE';
     } else {
       pill.className = 'status-pill offline';
       statusText.textContent = 'OFFLINE';
     }
+  }
+
+  function render(data) {
+    setOnlinePill(data.serverOnline);
 
     document.getElementById('mapTag').textContent = data.map ? data.map.toUpperCase() : 'AERIAL WARFARE';
     document.getElementById('lastUpdated').textContent = 'last checked ' + fmtTime(data.lastUpdated);
@@ -192,6 +196,11 @@
   setInterval(load, 60000);
 
   function renderLive(data) {
+    // The socket only exists while the game server process itself is up, so
+    // receiving any message at all is stronger evidence of "online" than the
+    // ~10-minute A2S poll behind status.json -- let it override that pill.
+    setOnlinePill(data.serverOnline);
+
     var lb = document.getElementById('leaderboardBody');
     if (data.topKills && data.topKills.length) {
       lb.innerHTML = data.topKills.map(function (row, i) {
