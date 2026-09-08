@@ -67,6 +67,29 @@
   .online-list { padding: 14px 18px; display: flex; flex-wrap: wrap; gap: 8px; }
   .online-chip { font-family: var(--font-mono); font-size: 12.5px; padding: 5px 10px; border-radius: 6px; background: var(--surface-2); border: 1px solid var(--border); }
   .empty-state { padding: 22px 18px; color: var(--text-dim); font-size: 13px; line-height: 1.5; }
+  .overflow-x { overflow-x: auto; }
+  .panels { display: grid; grid-template-columns: 1.3fr 1fr; gap: 16px; margin-top: 16px; }
+  @media (max-width: 700px) { .panels { grid-template-columns: 1fr; } }
+  table.leaderboard { width: 100%; border-collapse: collapse; font-size: 14px; }
+  table.leaderboard th {
+    text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--text-dim); font-weight: 500; padding: 8px 18px;
+  }
+  table.leaderboard td { padding: 9px 18px; border-top: 1px solid var(--border); font-variant-numeric: tabular-nums; }
+  table.leaderboard td.rank { font-family: var(--font-mono); color: var(--text-dim); width: 28px; }
+  table.leaderboard td.kd { font-family: var(--font-mono); color: var(--text-dim); text-align: right; }
+  .roster-list { list-style: none; margin: 0; padding: 4px 0; }
+  .roster-list li { display: flex; justify-content: space-between; align-items: center; padding: 9px 18px; border-top: 1px solid var(--border); font-size: 14px; }
+  .roster-list li:first-child { border-top: none; }
+  .role-chip {
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.04em; padding: 2px 8px;
+    border-radius: 5px; text-transform: uppercase;
+  }
+  .role-chip.admin { background: var(--bad-dim); color: #f2a4a7; }
+  .role-chip.mod { background: #203245; color: #8fb3d9; }
+  .feed { font-family: var(--font-mono); font-size: 12.5px; line-height: 1.7; padding: 4px 18px 14px; color: var(--text-dim); max-height: 210px; overflow-y: auto; }
+  .live-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text-dim); display: inline-block; margin-right: 6px; }
+  .live-dot.on { background: var(--accent); box-shadow: 0 0 6px var(--accent); }
   footer { margin-top: 22px; font-family: var(--font-mono); font-size: 11px; color: var(--text-dim); text-align: center; }
   footer a { color: var(--text-dim); }
 </style>
@@ -81,6 +104,7 @@
     <div>
       <span class="status-pill offline" id="statusPill"><span class="dot"></span><span id="statusText">CHECKING&hellip;</span></span>
       <div class="meta-line" id="lastUpdated">no data yet</div>
+      <div class="meta-line"><span class="live-dot" id="liveDot"></span><span id="liveText">connecting to live feed&hellip;</span></div>
     </div>
   </header>
 
@@ -94,7 +118,25 @@
     <div class="online-list" id="onlineList"><div class="empty-state">No data yet.</div></div>
   </div>
 
-  <footer>Polled from the server's own query port every ~10 minutes by a GitHub Actions job &mdash; not truly live.</footer>
+  <div class="panels">
+    <div class="panel">
+      <h2>Leaderboard &mdash; All-Time Kills</h2>
+      <div class="overflow-x">
+        <table class="leaderboard">
+          <thead><tr><th></th><th>Pilot</th><th style="text-align:right">K</th><th style="text-align:right">D</th></tr></thead>
+          <tbody id="leaderboardBody"><tr><td colspan="4" class="empty-state">Waiting on live feed&hellip;</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>Staff Roster</h2>
+      <ul class="roster-list" id="staffList"><li class="empty-state" style="display:block">Waiting on live feed&hellip;</li></ul>
+      <h2 style="border-top:1px solid var(--border)">Recent Admin Actions</h2>
+      <div class="feed" id="adminFeed">Waiting on live feed&hellip;</div>
+    </div>
+  </div>
+
+  <footer>Player count/map polled from the server's own query port every ~10 minutes. Kills/staff/admin feed stream live over wss:// when connected.</footer>
 </div>
 
 <script>
@@ -148,6 +190,96 @@
 
   load();
   setInterval(load, 60000);
+
+  function renderLive(data) {
+    var lb = document.getElementById('leaderboardBody');
+    if (data.topKills && data.topKills.length) {
+      lb.innerHTML = data.topKills.map(function (row, i) {
+        return '<tr><td class="rank">' + (i + 1) + '</td><td>' + escapeHtml(row.name) + '</td><td class="kd">' + row.kills + '</td><td class="kd">' + row.deaths + '</td></tr>';
+      }).join('');
+    } else {
+      lb.innerHTML = '<tr><td colspan="4" class="empty-state">No kills logged yet.</td></tr>';
+    }
+
+    var staffList = document.getElementById('staffList');
+    if (data.staff && data.staff.length) {
+      staffList.innerHTML = data.staff.map(function (s) {
+        return '<li><span>' + escapeHtml(s.name) + '</span><span class="role-chip ' + (s.role === 'admin' ? 'admin' : 'mod') + '">' + escapeHtml(s.role) + '</span></li>';
+      }).join('');
+    } else {
+      staffList.innerHTML = '<li class="empty-state" style="display:block">No staff assigned yet.</li>';
+    }
+
+    var feed = document.getElementById('adminFeed');
+    if (data.recentAdminActions && data.recentAdminActions.length) {
+      feed.innerHTML = data.recentAdminActions.slice().reverse().map(function (line) {
+        return escapeHtml(line);
+      }).join('<br>');
+    } else {
+      feed.textContent = 'No admin actions logged yet.';
+    }
+
+    // The live feed's own player list is more current than the ~10-minute A2S
+    // poll behind status.json -- prefer it for the "Currently In Flight" panel
+    // whenever the socket is actually connected.
+    if (data.currentPlayers) {
+      var onlineList = document.getElementById('onlineList');
+      if (data.currentPlayers.length) {
+        onlineList.innerHTML = data.currentPlayers.map(function (p) {
+          return '<span class="online-chip">' + escapeHtml(p) + '</span>';
+        }).join('');
+      } else {
+        onlineList.innerHTML = '<div class="empty-state">Server online, no pilots in flight.</div>';
+      }
+      document.getElementById('tilePlayers').textContent = data.currentPlayers.length;
+    }
+  }
+
+  // Reconnects with backoff rather than a fixed retry -- this is a public page
+  // left open indefinitely in browser tabs, so a dead/restarting server
+  // shouldn't turn into a tight reconnect loop hammering it.
+  var liveReconnectDelayMs = 2000;
+  function connectLive() {
+    var liveDot = document.getElementById('liveDot');
+    var liveText = document.getElementById('liveText');
+    var socket;
+    try {
+      socket = new WebSocket('wss://live.latticeworks-ai.com/');
+    } catch (e) {
+      scheduleReconnect();
+      return;
+    }
+
+    socket.onopen = function () {
+      liveDot.className = 'live-dot on';
+      liveText.textContent = 'live feed connected';
+      liveReconnectDelayMs = 2000;
+    };
+
+    socket.onmessage = function (event) {
+      try {
+        renderLive(JSON.parse(event.data));
+      } catch (e) { /* malformed frame -- ignore, next one will land */ }
+    };
+
+    // A failed connection fires BOTH onerror and onclose -- reconnectScheduled
+    // guards against scheduling two overlapping reconnect timers for the one
+    // failure, since both handlers below call the same scheduleReconnect().
+    var reconnectScheduled = false;
+    function scheduleReconnect() {
+      if (reconnectScheduled) return;
+      reconnectScheduled = true;
+      liveDot.className = 'live-dot';
+      liveText.textContent = 'live feed disconnected, retrying…';
+      setTimeout(connectLive, liveReconnectDelayMs);
+      liveReconnectDelayMs = Math.min(liveReconnectDelayMs * 2, 60000);
+    }
+
+    socket.onclose = scheduleReconnect;
+    socket.onerror = scheduleReconnect;
+  }
+
+  connectLive();
 </script>
 </body>
 </html>
