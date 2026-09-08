@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Aerial Warfare Status</title>
+<link rel="icon" href="icon.png">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  :root {
+    --bg: #0b0f14;
+    --surface: #10161d;
+    --surface-2: #151d26;
+    --border: #22303d;
+    --text: #dce7ef;
+    --text-dim: #7d93a6;
+    --accent: #e8a23d;
+    --ok: #3ecf8e;
+    --ok-dim: #1f4636;
+    --bad: #e6555a;
+    --bad-dim: #4a2426;
+    --font-display: 'Rajdhani', 'Arial Narrow', sans-serif;
+    --font-body: 'IBM Plex Sans', system-ui, -apple-system, sans-serif;
+    --font-mono: 'IBM Plex Mono', 'SF Mono', Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); }
+  body {
+    color: var(--text);
+    font-family: var(--font-body);
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 900px; margin: 0 auto; padding: 40px 24px 60px; }
+  header {
+    display: flex; align-items: baseline; justify-content: space-between;
+    gap: 16px; padding-bottom: 18px; border-bottom: 1px solid var(--border);
+    margin-bottom: 22px; flex-wrap: wrap;
+  }
+  .callsign { display: flex; align-items: baseline; gap: 12px; }
+  .callsign h1 {
+    font-family: var(--font-display); font-weight: 700; font-size: 30px;
+    letter-spacing: 0.02em; margin: 0; text-wrap: balance;
+  }
+  .callsign .tag { font-family: var(--font-mono); font-size: 12px; color: var(--text-dim); letter-spacing: 0.08em; }
+  .status-pill {
+    display: inline-flex; align-items: center; gap: 8px; font-family: var(--font-mono);
+    font-size: 13px; letter-spacing: 0.04em; padding: 7px 14px; border-radius: 999px;
+    border: 1px solid var(--border); background: var(--surface);
+  }
+  .status-pill .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+  .status-pill.online { border-color: var(--ok-dim); }
+  .status-pill.online .dot { background: var(--ok); box-shadow: 0 0 8px var(--ok); }
+  .status-pill.offline { border-color: var(--bad-dim); }
+  .status-pill.offline .dot { background: var(--bad); }
+  .meta-line { font-family: var(--font-mono); font-size: 12px; color: var(--text-dim); margin-top: 4px; text-align: right; }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 26px; }
+  .tile { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px; }
+  .tile .num { font-family: var(--font-display); font-weight: 700; font-size: 34px; line-height: 1; font-variant-numeric: tabular-nums; }
+  .tile .label { font-size: 12px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.08em; margin-top: 6px; }
+  .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+  .panel h2 {
+    font-family: var(--font-display); font-size: 15px; font-weight: 600; letter-spacing: 0.06em;
+    text-transform: uppercase; color: var(--accent); margin: 0; padding: 14px 18px;
+    border-bottom: 1px solid var(--border); background: var(--surface-2);
+  }
+  .online-list { padding: 14px 18px; display: flex; flex-wrap: wrap; gap: 8px; }
+  .online-chip { font-family: var(--font-mono); font-size: 12.5px; padding: 5px 10px; border-radius: 6px; background: var(--surface-2); border: 1px solid var(--border); }
+  .empty-state { padding: 22px 18px; color: var(--text-dim); font-size: 13px; line-height: 1.5; }
+  footer { margin-top: 22px; font-family: var(--font-mono); font-size: 11px; color: var(--text-dim); text-align: center; }
+  footer a { color: var(--text-dim); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="callsign">
+      <h1>Aerial Warfare</h1>
+      <span class="tag" id="mapTag">CALIFORNIA2</span>
+    </div>
+    <div>
+      <span class="status-pill offline" id="statusPill"><span class="dot"></span><span id="statusText">CHECKING&hellip;</span></span>
+      <div class="meta-line" id="lastUpdated">no data yet</div>
+    </div>
+  </header>
+
+  <div class="tiles">
+    <div class="tile"><div class="num" id="tilePlayers">&ndash;</div><div class="label">Pilots Online</div></div>
+    <div class="tile"><div class="num" id="tileMax">&ndash;</div><div class="label">Slots</div></div>
+  </div>
+
+  <div class="panel">
+    <h2>Currently In Flight</h2>
+    <div class="online-list" id="onlineList"><div class="empty-state">No data yet.</div></div>
+  </div>
+
+  <footer>Polled from the server's own query port every ~10 minutes by a GitHub Actions job &mdash; not truly live.</footer>
+</div>
+
+<script>
+  function fmtTime(iso) {
+    if (!iso) return 'unknown';
+    try {
+      return new Date(iso).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' });
+    } catch (e) { return iso; }
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
+  function render(data) {
+    var pill = document.getElementById('statusPill');
+    var statusText = document.getElementById('statusText');
+    if (data.serverOnline) {
+      pill.className = 'status-pill online';
+      statusText.textContent = 'ONLINE';
+    } else {
+      pill.className = 'status-pill offline';
+      statusText.textContent = 'OFFLINE';
+    }
+
+    document.getElementById('mapTag').textContent = data.map ? data.map.toUpperCase() : 'AERIAL WARFARE';
+    document.getElementById('lastUpdated').textContent = 'last checked ' + fmtTime(data.lastUpdated);
+    document.getElementById('tilePlayers').textContent = data.playerCount != null ? data.playerCount : '–';
+    document.getElementById('tileMax').textContent = data.maxPlayers != null ? data.maxPlayers : '–';
+
+    var onlineList = document.getElementById('onlineList');
+    if (data.currentPlayers && data.currentPlayers.length) {
+      onlineList.innerHTML = data.currentPlayers.map(function (p) {
+        return '<span class="online-chip">' + escapeHtml(p) + '</span>';
+      }).join('');
+    } else {
+      onlineList.innerHTML = '<div class="empty-state">' + (data.serverOnline ? 'Server online, no pilots in flight.' : 'Server is offline.') + '</div>';
+    }
+  }
+
+  function load() {
+    fetch('status.json?_=' + Date.now())
+      .then(function (r) { return r.json(); })
+      .then(render)
+      .catch(function () {
+        document.getElementById('statusText').textContent = 'UNKNOWN';
+      });
+  }
+
+  load();
+  setInterval(load, 60000);
+</script>
+</body>
+</html>
