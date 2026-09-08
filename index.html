@@ -87,7 +87,6 @@
   }
   .role-chip.admin { background: var(--bad-dim); color: #f2a4a7; }
   .role-chip.mod { background: #203245; color: #8fb3d9; }
-  .feed { font-family: var(--font-mono); font-size: 12.5px; line-height: 1.7; padding: 4px 18px 14px; color: var(--text-dim); max-height: 210px; overflow-y: auto; }
   .live-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text-dim); display: inline-block; margin-right: 6px; }
   .live-dot.on { background: var(--accent); box-shadow: 0 0 6px var(--accent); }
   footer { margin-top: 22px; font-family: var(--font-mono); font-size: 11px; color: var(--text-dim); text-align: center; }
@@ -131,12 +130,10 @@
     <div class="panel">
       <h2>Staff Roster</h2>
       <ul class="roster-list" id="staffList"><li class="empty-state" style="display:block">Waiting on live feed&hellip;</li></ul>
-      <h2 style="border-top:1px solid var(--border)">Recent Admin Actions</h2>
-      <div class="feed" id="adminFeed">Waiting on live feed&hellip;</div>
     </div>
   </div>
 
-  <footer>Player count/map polled from the server's own query port every ~10 minutes. Kills/staff/admin feed stream live over wss:// when connected.</footer>
+  <footer>Player count, slots, kills and staff stream live over wss:// every ~10s while connected. Map name and offline detection fall back to an A2S poll every ~10 minutes.</footer>
 </div>
 
 <script>
@@ -219,18 +216,11 @@
       staffList.innerHTML = '<li class="empty-state" style="display:block">No staff assigned yet.</li>';
     }
 
-    var feed = document.getElementById('adminFeed');
-    if (data.recentAdminActions && data.recentAdminActions.length) {
-      feed.innerHTML = data.recentAdminActions.slice().reverse().map(function (line) {
-        return escapeHtml(line);
-      }).join('<br>');
-    } else {
-      feed.textContent = 'No admin actions logged yet.';
-    }
-
-    // The live feed's own player list is more current than the ~10-minute A2S
-    // poll behind status.json -- prefer it for the "Currently In Flight" panel
-    // whenever the socket is actually connected.
+    // The live feed's own player list/counts are seconds old, not the ~10-minute
+    // A2S poll behind status.json -- prefer them for these three spots whenever
+    // the socket is actually connected. maxPlayers barely ever changes, but it
+    // costs nothing to keep it live too rather than leaving it pinned to
+    // whatever status.json last happened to say.
     if (data.currentPlayers) {
       var onlineList = document.getElementById('onlineList');
       if (data.currentPlayers.length) {
@@ -241,6 +231,9 @@
         onlineList.innerHTML = '<div class="empty-state">Server online, no pilots in flight.</div>';
       }
       document.getElementById('tilePlayers').textContent = data.currentPlayers.length;
+    }
+    if (data.maxPlayers != null) {
+      document.getElementById('tileMax').textContent = data.maxPlayers;
     }
   }
 
