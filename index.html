@@ -109,7 +109,6 @@
 
   <div class="tiles">
     <div class="tile"><div class="num" id="tilePlayers">&ndash;</div><div class="label">Pilots Online</div></div>
-    <div class="tile"><div class="num" id="tileMax">&ndash;</div><div class="label">Slots</div></div>
   </div>
 
   <div class="panel">
@@ -162,13 +161,24 @@
     }
   }
 
+  // Single "X / Y" tile rather than two separate numbers -- max players is
+  // read straight from the running server (Provider.maxPlayers over the live
+  // socket, A2S max_players otherwise), so it can't go stale independently of
+  // the online count the way a hardcoded copy of server config would.
+  function setPilotsTile(online, max) {
+    var text = online != null ? String(online) : '–';
+    if (max != null) {
+      text += ' / ' + max;
+    }
+    document.getElementById('tilePlayers').textContent = text;
+  }
+
   function render(data) {
     setOnlinePill(data.serverOnline);
 
     document.getElementById('mapTag').textContent = data.map ? data.map.toUpperCase() : 'AERIAL WARFARE';
     document.getElementById('lastUpdated').textContent = 'last checked ' + fmtTime(data.lastUpdated);
-    document.getElementById('tilePlayers').textContent = data.playerCount != null ? data.playerCount : '–';
-    document.getElementById('tileMax').textContent = data.maxPlayers != null ? data.maxPlayers : '–';
+    setPilotsTile(data.playerCount, data.maxPlayers);
 
     var onlineList = document.getElementById('onlineList');
     if (data.currentPlayers && data.currentPlayers.length) {
@@ -230,10 +240,7 @@
       } else {
         onlineList.innerHTML = '<div class="empty-state">Server online, no pilots in flight.</div>';
       }
-      document.getElementById('tilePlayers').textContent = data.currentPlayers.length;
-    }
-    if (data.maxPlayers != null) {
-      document.getElementById('tileMax').textContent = data.maxPlayers;
+      setPilotsTile(data.currentPlayers.length, data.maxPlayers);
     }
   }
 
