@@ -1,9 +1,10 @@
 {
-  "serverOnline": true,
-  "serverName": "Aerial Warfare",
-  "map": "California2",
+  "serverOnline": false,
+  "serverName": null,
+  "map": null,
   "playerCount": 0,
-  "maxPlayers": 8,
+  "maxPlayers": 0,
   "currentPlayers": [],
-  "lastUpdated": "2026-09-08T01:16:31.195868+00:00"
+  "lastUpdated": "2026-09-08T06:01:22.960221+00:00",
+  "error": "timed out"
 }
